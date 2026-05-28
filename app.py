@@ -34,7 +34,6 @@ def load_dataset():
         feature = ['city', 'certificate', 'land_size_m2', 'building_size_m2', 'bedrooms', 'bathrooms', 'garages', 'carports', 'price_in_rp']
         df = df[feature].dropna(subset=['price_in_rp'])
         
-        # Sesuai pembersihan IQR asli Anda di notebook
         def remove_outliers_iqr_local(data, columns):
             df_out = data.copy()
             for col in columns:
@@ -63,7 +62,6 @@ if model is None or df_history is None or eval_data is None:
 # -----------------------------------------------------------------
 st.sidebar.header("🏡 Spesifikasi Properti")
 
-# Menyeimbangkan pemetaan pilihan teks dengan spasi bawaan dataset asli
 city = st.sidebar.selectbox(
     "Kota (Wilayah):",
     ["Jakarta Selatan", "Jakarta Barat", "Jakarta Timur", "Jakarta Utara", "Jakarta Pusat", "Tangerang", "Bekasi", "Depok", "Bogor"]
@@ -95,30 +93,34 @@ with col_sb2:
     bathrooms = st.number_input("Kamar Mandi", min_value=1, max_value=10, value=2)
     carports = st.number_input("Carport (Mobil)", min_value=0, max_value=5, value=0)
 
+# Fungsi pembaca format mata uang Indonesia
+def format_rupiah(angka):
+    if angka >= 1e9:
+        return f"Rp {angka/1e9:.2f} Miliar"
+    elif angka >= 1e6:
+        return f"Rp {angka/1e6:.0f} Juta"
+    else:
+        return f"Rp {angka:,.0f}"
+
 # -----------------------------------------------------------------
-# --- PROSES PREDIKSI UTAMA ---
+# UI - HALAMAN UTAMA
 # -----------------------------------------------------------------
-# Siapkan data input dengan penambahan spasi manual jika teks notebook belum di-strip
+st.title("🏡 Smart Forecast: Harga Rumah Jabodetabek")
+st.subheader(f"Analisis Estimasi Properti di {city}")
+st.markdown("---")
+
+# -----------------------------------------------------------------
+# --- PROSES PREDIKSI & OUTPUT METRIK ---
+# -----------------------------------------------------------------
 if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=True):
     
-    # ==========================================
     # 🛑 BLOK VALIDASI INPUT USER
-    # ==========================================
-    # OPSI 1: Validasi Keras (Error dan berhenti jika Bangunan > Tanah)
-    # Hapus tanda pagar (#) di bawah ini jika Anda ingin benar-benar melarangnya:
-    # if building_size > land_size:
-    #     st.error("❌ Peringatan: Luas bangunan tidak boleh lebih besar dari luas tanah pada aplikasi ini.")
-    #     st.stop() # Menghentikan proses prediksi
-    
-    # OPSI 2: Validasi Cerdas (Memberikan peringatan tapi tetap dilanjut)
     if building_size > (land_size * 3):
         st.error("❌ Luas bangunan terlalu tidak masuk akal (lebih dari 3x lipat luas tanah). Silakan perbaiki input Anda.")
         st.stop()
     elif building_size > land_size:
         st.warning("⚠️ Catatan: Luas bangunan Anda lebih besar dari luas tanah. Kami mengasumsikan ini adalah rumah bertingkat (2 lantai atau lebih).")
         
-    # ==========================================
-    
     with st.spinner("Model sedang menganalisis spesifikasi properti..."):
         # Siapkan data input
         input_data = pd.DataFrame({
@@ -139,66 +141,72 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
         prediksi_log = model.predict(input_final)
         prediksi_rupiah = np.expm1(prediksi_log[0])
 
-# Kalkulasi Statistik Kota untuk visualisasi Gauge
-avg_city_price = df_history[df_history['city'] == f" {city}"]['price_in_rp'].mean()
-if pd.isna(avg_city_price):
-    avg_city_price = df_history['price_in_rp'].mean()
+        # Kalkulasi Statistik Kota
+        avg_city_price = df_history[df_history['city'] == f" {city}"]['price_in_rp'].mean()
+        if pd.isna(avg_city_price):
+            avg_city_price = df_history['price_in_rp'].mean()
 
-# Fungsi pembaca format mata uang Indonesia
-def format_rupiah(angka):
-    if angka >= 1e9:
-        return f"Rp {angka/1e9:.2f} Miliar"
-    elif angka >= 1e6:
-        return f"Rp {angka/1e6:.0f} Juta"
-    else:
-        return f"Rp {angka:,.0f}"
+        # Menampilkan Output Metrik
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                label="Prediksi Nilai Pasar Wajar",
+                value=format_rupiah(prediksi_rupiah),
+                delta="Algoritma Random Forest"
+            )
+
+        with col2:
+            selisih_avg = prediksi_rupiah - avg_city_price
+            st.metric(
+                label=f"Rata-rata Harga Historis di {city}",
+                value=format_rupiah(avg_city_price),
+                delta=f"{selisih_avg/1e9:+.2f} M vs rata-rata",
+                delta_color="inverse"
+            )
+
+        with col3:
+            st.markdown("**Status Valuasi Properti:**")
+            if prediksi_rupiah <= avg_city_price * 0.8:
+                st.success("✅ **Ekonomis (Di bawah pasar)**")
+            elif prediksi_rupiah <= avg_city_price * 1.5:
+                st.info("⚖️ **Kompetitif (Wajar/Sesuai pasar)**")
+            else:
+                st.warning("👑 **Premium (Di atas rata-rata)**")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Menampilkan Visualisasi Gauge Chart
+        st.subheader("Visualisasi Posisi Harga")
+        max_gauge = max(avg_city_price * 2.5, prediksi_rupiah * 1.5)
+
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = prediksi_rupiah,
+            title = {'text': "Taksiran Nilai Jual (Rp)"},
+            delta = {'reference': avg_city_price, 'position': "top"},
+            gauge = {
+                'axis': {'range': [0, max_gauge]},
+                'bar': {'color': "#1E3A8A"},
+                'steps' : [
+                    {'range': [0, avg_city_price * 0.8], 'color': "rgba(46, 139, 87, 0.3)"},
+                    {'range': [avg_city_price * 0.8, avg_city_price * 1.5], 'color': "rgba(255, 165, 0, 0.3)"},
+                    {'range': [avg_city_price * 1.5, max_gauge], 'color': "rgba(255, 0, 0, 0.3)"}
+                ],
+                'threshold' : {'line': {'color': "black", 'width': 4}, 'thickness': 0.75, 'value': prediksi_rupiah}
+            }
+        ))
+        fig_gauge.update_layout(height=380)
+        st.plotly_chart(fig_gauge, use_container_width=True)
 
 # -----------------------------------------------------------------
-# UI - HALAMAN UTAMA
+# --- TABEL DATA & EVALUASI (TETAP MUNCUL DI LUAR TOMBOL) ---
 # -----------------------------------------------------------------
-st.title("🏡 Smart Forecast: Harga Rumah Jabodetabek")
-st.subheader(f"Analisis Estimasi Properti di {city}")
 st.markdown("---")
 
-# --- OUTPUT METRIK ---
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric(
-        label="Prediksi Nilai Pasar Wajar",
-        value=format_rupiah(prediksi_rupiah),
-        delta="Algoritma Random Forest"
-    )
-
-with col2:
-    selisih_avg = prediksi_rupiah - avg_city_price
-    st.metric(
-        label=f"Rata-rata Harga Historis di {city}",
-        value=format_rupiah(avg_city_price),
-        delta=f"{selisih_avg/1e9:+.2f} M vs rata-rata",
-        delta_color="inverse"
-    )
-
-with col3:
-    st.markdown("**Status Valuasi Properti:**")
-    if prediksi_rupiah <= avg_city_price * 0.8:
-        st.success("✅ **Ekonomis (Di bawah pasar)**")
-    elif prediksi_rupiah <= avg_city_price * 1.5:
-        st.info("⚖️ **Kompetitif (Wajar/Sesuai pasar)**")
-    else:
-        st.warning("👑 **Premium (Di atas rata-rata)**")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-
-# --- TABEL DATA HISTORIS ---
 with st.expander("Lihat Sampel Dataset Historis (Data Pasca IQR)"):
     st.dataframe(df_history.head(500), use_container_width=True)
 
-# -----------------------------------------------------------------
-# --- EVALUASI MODEL (DIJAMIN 100% SAMA DENGAN NOTEBOOK) ---
-# -----------------------------------------------------------------
-st.markdown("---")
 st.header("🔬 Evaluasi Performa Kualitas Model")
 
 # Ekstrak data hasil evaluasi original milik notebook
