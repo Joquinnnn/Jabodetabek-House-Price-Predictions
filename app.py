@@ -189,7 +189,7 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
             st.metric(
                 label="🎯 Confidence Level",
                 value=f"{confidence_score:.1f}%",
-                delta="Tingkat Kepastian AI"
+                delta="Tingkat Kepastian"
             )
 
         with col3:
@@ -204,30 +204,15 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
         with col4:
             st.markdown("**Status Valuasi Properti:**")
             if prediksi_rupiah <= avg_city_price * 0.8:
-                st.success("✅ **Ekonomis (Underpriced)**")
+                st.success("**Harga Ekonomis (Underpriced)**")
             elif prediksi_rupiah <= avg_city_price * 1.5:
-                st.info("⚖️ **Kompetitif (Fair Price)**")
+                st.info("✅ **Harga Kompetitif (Fair Price)**")
             else:
-                st.warning("👑 **Premium (Overpriced)**")
+                st.warning("✅ **Harga Premium (Overpriced)**")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Komponen Pengganti Gauge Chart: Rentang Harga
-        st.subheader("📊 Analisis Distribusi Rentang Batas Harga Wajar")
         
-        if confidence_score >= 80:
-            st.success(f"🤖 **Model Kategori Stabil ({confidence_score:.1f}%):** Spesifikasi properti yang Anda masukkan memiliki kepadatan data historis yang sangat tinggi. Hasil estimasi berada pada tingkat akurasi tinggi.")
-        else:
-            st.warning(f"⚠️ **Model Kategori Fluktuatif ({confidence_score:.1f}%):** Rentang variasi harga properti sejenis di lapangan cukup lebar. Disarankan untuk mengecek kondisi interior/fisik bangunan secara langsung.")
-
-        st.info(f"""
-        **Skema Rentang Estimasi Finansial Properti:**
-        * 🔽 **Batas Minimum Wajar :** {format_rupiah(lower_bound)}
-        * 🎯 **Nilai Prediksi Utama  :** {format_rupiah(prediksi_rupiah)}
-        * 🔼 **Batas Maksimum Wajar :** {format_rupiah(upper_bound)}
-        
-        *Rekomendasi Analisis: Jika harga penawaran real dari penjual berada di dalam rentang batas minimum dan maksimum di atas, properti tersebut dikategorikan masuk akal dan aman untuk dibeli.*
-        """)
 
 # -----------------------------------------------------------------
 # --- TABEL DATA & EVALUASI (SELALU TAMPIL) ---
