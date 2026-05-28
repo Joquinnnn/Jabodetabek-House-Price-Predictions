@@ -24,7 +24,7 @@ def load_artifacts():
         eval_data = joblib.load('eval_data.pkl')
         return model, columns, eval_data
     except Exception as e:
-        st.error(f"Gagal memuat file artifact model (Pastikan model_harga_rumah.pkl, model_columns.pkl, dan eval_data.pkl ada di folder): {e}")
+        st.error(f"Gagal memuat file artifact model: {e}")
         return None, None, None
 
 @st.cache_data
@@ -34,6 +34,7 @@ def load_dataset():
         feature = ['city', 'certificate', 'land_size_m2', 'building_size_m2', 'bedrooms', 'bathrooms', 'garages', 'carports', 'price_in_rp']
         df = df[feature].dropna(subset=['price_in_rp'])
         
+        # Pembersihan IQR bawaan
         def remove_outliers_iqr_local(data, columns):
             df_out = data.copy()
             for col in columns:
@@ -141,7 +142,7 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
         prediksi_log = model.predict(input_final)
         prediksi_rupiah = np.expm1(prediksi_log[0])
 
-        # Kalkulasi Statistik Rata-rata Kota
+        # Kalkulasi Rata-rata Kota untuk Pembanding
         avg_city_price = df_history[df_history['city'] == f" {city}"]['price_in_rp'].mean()
         if pd.isna(avg_city_price):
             avg_city_price = df_history['price_in_rp'].mean()
@@ -150,28 +151,31 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
         # 🛡️ ESTIMASI REAL-TIME CONFIDENCE LEVEL & RENTANG WAJAR
         # =========================================================
         try:
-            # Mengambil prediksi logaritmik dari masing-masing pohon keputusan di Random Forest
-            tree_preds_log = np.array([tree.predict(input_final)[0] for tree in model.estimators_])
+            # Gunakan .values agar fitur aman dibaca oleh tiap estimator Random Forest
+            X_array = input_final.values
+            
+            # Ekstrak tebakan dari setiap pohon
+            tree_preds_log = np.array([tree.predict(X_array)[0] for tree in model.estimators_])
             tree_preds_real = np.expm1(tree_preds_log)
             
-            # Hitung Standar Deviasi tebakan antar pohon (Indikator Ketidakpastian)
+            # Hitung deviasi dan koefisien kepastian
             std_error = np.std(tree_preds_real)
+            cv = std_error / prediksi_rupiah if prediksi_rupiah > 0 else 1
+            confidence_score = max(40.0, min(99.9, 100.0 - (cv * 100)))
             
-            # Tentukan Rentang Batas Wajar (Prediction Interval 95% ~ 1.96 * STD)
+            # Hitung Rentang Wajar
             lower_bound = max(0, prediksi_rupiah - (1.96 * std_error))
             upper_bound = prediksi_rupiah + (1.96 * std_error)
-            
-            # Skor tingkat kepercayaan berbasis koefisien variasi tebakan pohon
-            cv = std_error / prediksi_rupiah if prediksi_rupiah > 0 else 1
-            confidence_score = max(50.0, min(99.9, 100.0 - (cv * 100)))
-        except Exception:
-            # Jika objek model mengalami kendala struktur, gunakan pendekatan performa global MAE
-            mae_global = eval_data['mae']
-            lower_bound = max(0, prediksi_rupiah - mae_global)
-            upper_bound = prediksi_rupiah + mae_global
-            confidence_score = 84.81  # Default akurasi global R2
 
-        # Menampilkan Output Metrik dalam 4 Kolom Proporsional
+        except Exception as e:
+            st.error(f"Gagal menghitung Confidence Level: {e}")
+            confidence_score = eval_data['r2'] * 100
+            lower_bound = prediksi_rupiah - eval_data['mae']
+            upper_bound = prediksi_rupiah + eval_data['mae']
+
+        # =========================================================
+        # TAMPILAN OUTPUT
+        # =========================================================
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -208,27 +212,25 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Komponen Pengganti Gauge Chart: Penjelasan Komprehensif Rentang Batas Wajar
+        # Komponen Pengganti Gauge Chart: Rentang Harga
         st.subheader("📊 Analisis Distribusi Rentang Batas Harga Wajar")
         
-        # Logika Status untuk Peringatan Batas Kepercayaan
         if confidence_score >= 80:
-            st.success(f"🤖 **Model Kategori Stabil ({confidence_score:.1f}%):** Spesifikasi properti yang Anda masukkan memiliki kepadatan data historis yang sangat tinggi di wilayah {city}. Hasil estimasi berada pada tingkat akurasi tinggi.")
+            st.success(f"🤖 **Model Kategori Stabil ({confidence_score:.1f}%):** Spesifikasi properti yang Anda masukkan memiliki kepadatan data historis yang sangat tinggi. Hasil estimasi berada pada tingkat akurasi tinggi.")
         else:
-            st.warning(f"⚠️ **Model Kategori Fluktuatif ({confidence_score:.1f}%):** Rentang variasi harga properti sejenis di lapangan cukup lebar. Disarankan untuk cross-check kondisi interior bangunan fisik secara langsung.")
+            st.warning(f"⚠️ **Model Kategori Fluktuatif ({confidence_score:.1f}%):** Rentang variasi harga properti sejenis di lapangan cukup lebar. Disarankan untuk mengecek kondisi interior/fisik bangunan secara langsung.")
 
-        # Tampilan Rentang Batas Nilai Pasar
         st.info(f"""
         **Skema Rentang Estimasi Finansial Properti:**
         * 🔽 **Batas Minimum Wajar :** {format_rupiah(lower_bound)}
         * 🎯 **Nilai Prediksi Utama  :** {format_rupiah(prediksi_rupiah)}
         * 🔼 **Batas Maksimum Wajar :** {format_rupiah(upper_bound)}
         
-        *Rekomendasi Analisis: Jika harga penawaran real dari penjual berada di dalam rentang batas minimum dan maksimum di atas, properti tersebut dikategorikan masuk akal dan aman untuk dibeli sesuai pergerakan instrumen pasar residensial saat ini.*
+        *Rekomendasi Analisis: Jika harga penawaran real dari penjual berada di dalam rentang batas minimum dan maksimum di atas, properti tersebut dikategorikan masuk akal dan aman untuk dibeli.*
         """)
 
 # -----------------------------------------------------------------
-# --- TABEL DATA & EVALUASI GLOWING ---
+# --- TABEL DATA & EVALUASI (SELALU TAMPIL) ---
 # -----------------------------------------------------------------
 st.markdown("---")
 
@@ -237,7 +239,6 @@ with st.expander("Lihat Sampel Dataset Historis (Data Pasca IQR)"):
 
 st.header("🔬 Evaluasi Performa Kualitas Model")
 
-# Ekstrak data hasil evaluasi original milik notebook
 y_test_real = eval_data['y_aktual']
 y_pred_real = eval_data['y_prediksi']
 mae = eval_data['mae']
