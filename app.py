@@ -29,14 +29,32 @@ def load_artifacts():
         return None, None
 
 @st.cache_data
+@st.cache_data
 def load_dataset():
     try:
         df = pd.read_csv('jabodetabek_house_price.csv')
-        # Preprocessing dasar untuk visualisasi
         feature = ['city', 'certificate', 'land_size_m2', 'building_size_m2', 'bedrooms', 'bathrooms', 'garages', 'carports', 'price_in_rp']
         df = df[feature].dropna(subset=['price_in_rp'])
-        # Filter batasan logika rumah (hapus anomali ekstrem)
-        df = df[(df['bedrooms'] <= 10) & (df['bathrooms'] <= 10) & (df['garages'] <= 5) & (df['carports'] <= 5)]
+        
+        # 1. Masukkan Fungsi IQR persis seperti di Notebook
+        def remove_outliers_iqr_local(data, columns):
+            df_out = data.copy()
+            for col in columns:
+                Q1 = data[col].quantile(0.25)
+                Q3 = data[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower = Q1 - 1.5 * IQR
+                upper = Q3 + 1.5 * IQR
+                df_out = df_out[(df_out[col] >= lower) & (df_out[col] <= upper)]
+            return df_out
+
+        # 2. Terapkan pembersihan IQR
+        df = remove_outliers_iqr_local(df, ['price_in_rp', 'land_size_m2', 'building_size_m2', 'bedrooms', 'bathrooms', 'garages', 'carports'])
+        
+        # 3. Bersihkan spasi teks agar visualisasi dan metrik akurat
+        df['city'] = df['city'].str.strip()
+        df['certificate'] = df['certificate'].str.lower()
+        
         return df
     except Exception as e:
         st.error(f"Gagal memuat dataset: {e}")
