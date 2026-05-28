@@ -9,9 +9,31 @@ import joblib
 # -----------------------------------------------------------------
 st.set_page_config(
     page_title="Jabodetabek House Price Estimator",
-    page_icon="🏡",
     layout="wide"
 )
+
+st.markdown("""
+<style>
+    /* Tombol */
+    div[data-testid="stButton"] button {
+        background-color: #345790;
+        color: white;
+        border-radius: 12px;
+        border: none;
+        font-size: 16px;
+        font-weight: bold;
+        padding: 12px;
+        transition: 0.3s;
+    }
+
+    /* Hover tombol */
+    div[data-testid="stButton"] button:hover {
+        background-color: #c9daf8;
+        color: white;
+        transform: scale(1.02);
+    }
+
+""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------
 # --- LOAD MODEL & DATA ARTIFACTS ---
@@ -106,7 +128,7 @@ def format_rupiah(angka):
 # -----------------------------------------------------------------
 # UI - HALAMAN UTAMA
 # -----------------------------------------------------------------
-st.title("🏡 Smart Forecast: Harga Rumah Jabodetabek")
+st.title("Smart Forecast: Harga Rumah Jabodetabek")
 st.subheader(f"Analisis Estimasi Properti di {city}")
 st.markdown("---")
 
@@ -148,7 +170,7 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
             avg_city_price = df_history['price_in_rp'].mean()
 
         # =========================================================
-        # 🛡️ ESTIMASI REAL-TIME CONFIDENCE LEVEL & RENTANG WAJAR
+        # ESTIMASI REAL-TIME CONFIDENCE LEVEL & RENTANG WAJAR
         # =========================================================
         try:
             # Gunakan .values agar fitur aman dibaca oleh tiap estimator Random Forest
@@ -206,9 +228,9 @@ if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=
             if prediksi_rupiah <= avg_city_price * 0.8:
                 st.success("**Harga Ekonomis (Underpriced)**")
             elif prediksi_rupiah <= avg_city_price * 1.5:
-                st.info("✅ **Harga Kompetitif (Fair Price)**")
+                st.info("**Harga Kompetitif (Fair Price)**")
             else:
-                st.warning("✅ **Harga Premium (Overpriced)**")
+                st.warning("**Harga Premium (Overpriced)**")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
