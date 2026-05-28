@@ -168,28 +168,6 @@ with col3:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- VISUALISASI GAUGE CHART ---
-st.subheader("Visualisasi Posisi Harga")
-max_gauge = max(avg_city_price * 2.5, prediksi_rupiah * 1.5)
-
-fig_gauge = go.Figure(go.Indicator(
-    mode = "gauge+number+delta",
-    value = prediksi_rupiah,
-    title = {'text': "Taksiran Nilai Jual (Rp)"},
-    delta = {'reference': avg_city_price, 'position': "top"},
-    gauge = {
-        'axis': {'range': [0, max_gauge]},
-        'bar': {'color': "#1E3A8A"},
-        'steps' : [
-            {'range': [0, avg_city_price * 0.8], 'color': "rgba(46, 139, 87, 0.3)"},
-            {'range': [avg_city_price * 0.8, avg_city_price * 1.5], 'color': "rgba(255, 165, 0, 0.3)"},
-            {'range': [avg_city_price * 1.5, max_gauge], 'color': "rgba(255, 0, 0, 0.3)"}
-        ],
-        'threshold' : {'line': {'color': "black", 'width': 4}, 'thickness': 0.75, 'value': prediksi_rupiah}
-    }
-))
-fig_gauge.update_layout(height=380)
-st.plotly_chart(fig_gauge, use_container_width=True)
 
 # --- TABEL DATA HISTORIS ---
 with st.expander("Lihat Sampel Dataset Historis (Data Pasca IQR)"):
