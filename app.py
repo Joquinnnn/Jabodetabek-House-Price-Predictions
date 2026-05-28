@@ -99,23 +99,45 @@ with col_sb2:
 # --- PROSES PREDIKSI UTAMA ---
 # -----------------------------------------------------------------
 # Siapkan data input dengan penambahan spasi manual jika teks notebook belum di-strip
-input_data = pd.DataFrame({
-    'land_size_m2': [np.log1p(land_size)], 
-    'building_size_m2': [np.log1p(building_size)], 
-    'bedrooms': [bedrooms],
-    'bathrooms': [bathrooms],
-    'garages': [garages],
-    'carports': [carports],
-    'city': [f" {city}"], 
-    'certificate': [cert_mapping[certificate]]
-})
+if st.button("Hitung Estimasi Harga Rumah", type="primary", use_container_width=True):
+    
+    # ==========================================
+    # 🛑 BLOK VALIDASI INPUT USER
+    # ==========================================
+    # OPSI 1: Validasi Keras (Error dan berhenti jika Bangunan > Tanah)
+    # Hapus tanda pagar (#) di bawah ini jika Anda ingin benar-benar melarangnya:
+    # if building_size > land_size:
+    #     st.error("❌ Peringatan: Luas bangunan tidak boleh lebih besar dari luas tanah pada aplikasi ini.")
+    #     st.stop() # Menghentikan proses prediksi
+    
+    # OPSI 2: Validasi Cerdas (Memberikan peringatan tapi tetap dilanjut)
+    if building_size > (land_size * 3):
+        st.error("❌ Luas bangunan terlalu tidak masuk akal (lebih dari 3x lipat luas tanah). Silakan perbaiki input Anda.")
+        st.stop()
+    elif building_size > land_size:
+        st.warning("⚠️ Catatan: Luas bangunan Anda lebih besar dari luas tanah. Kami mengasumsikan ini adalah rumah bertingkat (2 lantai atau lebih).")
+        
+    # ==========================================
+    
+    with st.spinner("Model sedang menganalisis spesifikasi properti..."):
+        # Siapkan data input
+        input_data = pd.DataFrame({
+            'land_size_m2': [np.log1p(land_size)], 
+            'building_size_m2': [np.log1p(building_size)], 
+            'bedrooms': [bedrooms],
+            'bathrooms': [bathrooms],
+            'garages': [garages],
+            'carports': [carports],
+            'city': [f" {city}"], 
+            'certificate': [cert_mapping[certificate]]
+        })
 
-input_encoded = pd.get_dummies(input_data, dtype=int)
-input_final = input_encoded.reindex(columns=model_columns, fill_value=0)
+        input_encoded = pd.get_dummies(input_data, dtype=int)
+        input_final = input_encoded.reindex(columns=model_columns, fill_value=0)
 
-# Jalankan Prediksi dari Model terbaik
-prediksi_log = model.predict(input_final)
-prediksi_rupiah = np.expm1(prediksi_log[0])
+        # Jalankan Prediksi
+        prediksi_log = model.predict(input_final)
+        prediksi_rupiah = np.expm1(prediksi_log[0])
 
 # Kalkulasi Statistik Kota untuk visualisasi Gauge
 avg_city_price = df_history[df_history['city'] == f" {city}"]['price_in_rp'].mean()
