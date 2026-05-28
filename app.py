@@ -53,20 +53,30 @@ if model is None or df_history is None:
 # -----------------------------------------------------------------
 st.sidebar.header("🏡 Spesifikasi Properti")
 
+# Biarkan UI tetap rapi untuk user
 city = st.sidebar.selectbox(
     "Kota (Wilayah):",
     ["Jakarta Selatan", "Jakarta Barat", "Jakarta Timur", "Jakarta Utara", "Jakarta Pusat", "Tangerang", "Bekasi", "Depok", "Bogor"]
 )
 
+# Gunakan teks yang lebih profesional di UI
 certificate = st.sidebar.selectbox(
     "Tipe Sertifikat:",
-    ["shm - sertifikat hak milik", "hgb - hak guna bangunan", "lainnya"]
+    ["SHM - Sertifikat Hak Milik", "HGB - Hak Guna Bangunan", "Lainnya"]
 )
+
+# --- Mapping Sertifikat ke format asli dataset ---
+cert_mapping = {
+    "SHM - Sertifikat Hak Milik": "shm - sertifikat hak milik",
+    "HGB - Hak Guna Bangunan": "hgb - hak guna bangunan",
+    "Lainnya": "lainnya (ppjb,girik,adat,dll)"
+}
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Dimensi Bangunan")
-land_size = st.sidebar.number_input("Luas Tanah (m²)", min_value=10, max_value=5000, value=120)
-building_size = st.sidebar.number_input("Luas Bangunan (m²)", min_value=10, max_value=5000, value=90)
+# Tambahkan step=10 agar saat diklik panah atas/bawah, langsung loncat 10 meter persegi
+land_size = st.sidebar.number_input("Luas Tanah (m²)", min_value=10, max_value=5000, value=120, step=10)
+building_size = st.sidebar.number_input("Luas Bangunan (m²)", min_value=10, max_value=5000, value=90, step=10)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Fasilitas Ruangan")
@@ -82,6 +92,10 @@ with col_sb2:
 # --- PROSES PREDIKSI UTAMA ---
 # -----------------------------------------------------------------
 # Siapkan data input
+# -----------------------------------------------------------------
+# --- PROSES PREDIKSI UTAMA ---
+# -----------------------------------------------------------------
+# Siapkan data input
 input_data = pd.DataFrame({
     'land_size_m2': [np.log1p(land_size)], 
     'building_size_m2': [np.log1p(building_size)], 
@@ -89,9 +103,13 @@ input_data = pd.DataFrame({
     'bathrooms': [bathrooms],
     'garages': [garages],
     'carports': [carports],
-    'city': [city],
-    'certificate': [certificate]
+    'city': [f" {city}"], # <--- Tambahkan spasi di depan agar cocok dengan dataset
+    'certificate': [cert_mapping[certificate]] # <--- Gunakan nama asli dari dataset
 })
+
+# Encoding & Alignment (Tambahkan dtype=int agar tidak error true/false)
+input_encoded = pd.get_dummies(input_data, dtype=int)
+input_final = input_encoded.reindex(columns=model_columns, fill_value=0)
 
 # Encoding & Alignment
 input_encoded = pd.get_dummies(input_data)
